@@ -6,7 +6,7 @@ import { useToasts } from 'react-toast-notifications';
 
 import { Button, LoadingButton } from '@arch-ui/button';
 import Drawer from '@arch-ui/drawer';
-import { arrayToObject, captureSuspensePromises, countArrays } from '@keystone-alpha/utils';
+import { arrayToObject, captureSuspensePromises, countArrays } from '@keystonejs/utils';
 import { gridSize } from '@arch-ui/theme';
 import { AutocompleteCaptor } from '@arch-ui/input';
 
@@ -18,7 +18,7 @@ let Render = ({ children }) => children();
 class CreateItemModal extends Component {
   constructor(props) {
     super(props);
-    const { list, prefillData } = props;
+    const { list, prefillData = {} } = props;
     const item = list.getInitialItemData({ prefill: prefillData });
     const validationErrors = {};
     const validationWarnings = {};
@@ -168,6 +168,7 @@ class CreateItemModal extends Component {
                             /* TODO: Permission query results */
                             errors={validationErrors[field.path] || []}
                             warnings={validationWarnings[field.path] || []}
+                            CreateItemModal={CreateItemModalWithMutation}
                             onChange={onChange}
                             renderContext="dialog"
                           />

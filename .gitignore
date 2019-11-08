@@ -1,4 +1,6 @@
 packages/test-project/public
+demo-projects/test-project
+
 # Logs
 logs
 *.log
@@ -108,3 +110,6 @@ tags
 [._]*.un~
 
 # End of https://www.gitignore.io/api/vim
+
+projects/
+temp/

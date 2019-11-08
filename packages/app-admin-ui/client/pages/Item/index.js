@@ -18,7 +18,7 @@ import {
   omitBy,
   captureSuspensePromises,
   countArrays,
-} from '@keystone-alpha/utils';
+} from '@keystonejs/utils';
 
 import CreateItemModal from '../../components/CreateItemModal';
 import DeleteItemModal from '../../components/DeleteItemModal';
@@ -334,6 +334,7 @@ const ItemDetails = withRouter(
                             savedValue={savedData[field.path]}
                             onChange={onChange}
                             renderContext="page"
+                            CreateItemModal={CreateItemModal}
                           />
                         ),
                         [

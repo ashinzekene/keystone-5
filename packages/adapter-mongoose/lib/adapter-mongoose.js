@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+
 const pSettle = require('p-settle');
 const {
   escapeRegExp,
@@ -7,19 +8,13 @@ const {
   mapKeys,
   mapKeyNames,
   identity,
-} = require('@keystone-alpha/utils');
+  mergeWhereClause,
+  versionGreaterOrEqualTo,
+} = require('@keystonejs/utils');
 
-const {
-  BaseKeystoneAdapter,
-  BaseListAdapter,
-  BaseFieldAdapter,
-} = require('@keystone-alpha/keystone');
-const {
-  queryParser,
-  pipelineBuilder,
-  mutationBuilder,
-} = require('@keystone-alpha/mongo-join-builder');
-const logger = require('@keystone-alpha/logger').logger('mongoose');
+const { BaseKeystoneAdapter, BaseListAdapter, BaseFieldAdapter } = require('@keystonejs/keystone');
+const { queryParser, pipelineBuilder, mutationBuilder } = require('@keystonejs/mongo-join-builder');
+const logger = require('@keystonejs/logger').logger('mongoose');
 
 const slugify = require('@sindresorhus/slugify');
 
@@ -30,6 +25,7 @@ class MongooseAdapter extends BaseKeystoneAdapter {
     super(...arguments);
     this.name = 'mongoose';
     this.mongoose = new mongoose.Mongoose();
+    this.minVer = '4.0.0';
     if (debugMongoose()) {
       this.mongoose.set('debug', true);
     }
@@ -80,8 +76,24 @@ class MongooseAdapter extends BaseKeystoneAdapter {
 
   getDefaultPrimaryKeyConfig() {
     // Required here due to circular refs
-    const { MongoId } = require('@keystone-alpha/fields-mongoid');
+    const { MongoId } = require('@keystonejs/fields-mongoid');
     return MongoId.primaryKeyDefaults[this.name].getConfig();
+  }
+
+  async checkDatabaseVersion() {
+    let info;
+
+    try {
+      info = await new this.mongoose.mongo.Admin(this.mongoose.connection.db).buildInfo();
+    } catch (error) {
+      console.log(`Error reading version from MongoDB: ${error}`);
+    }
+
+    if (!versionGreaterOrEqualTo(info.versionArray, this.minVer)) {
+      throw new Error(
+        `MongoDB version ${info.version} is incompatible. Version ${this.minVer} or later is required.`
+      );
+    }
   }
 }
 
@@ -173,7 +185,11 @@ class MongooseListAdapter extends BaseListAdapter {
   _update(id, data) {
     // Avoid any kind of injection attack by explicitly doing a `$set` operation
     // Return the modified item, not the original
-    return this.model.findByIdAndUpdate(id, { $set: data }, { new: true });
+    return this.model.findByIdAndUpdate(
+      id,
+      { $set: data },
+      { new: true, runValidators: true, context: 'query' }
+    );
   }
 
   _findAll() {
@@ -202,7 +218,16 @@ class MongooseListAdapter extends BaseListAdapter {
     return fieldAdapter.getMongoFieldName();
   }
 
-  _itemsQuery(args, { meta = false } = {}) {
+  async _itemsQuery(args, { meta = false, from, include } = {}) {
+    if (from && Object.keys(from).length) {
+      const ids = await from.fromList.adapter._itemsQuery(
+        { where: { id: from.fromId } },
+        { include: from.fromField }
+      );
+      if (ids.length) {
+        args = mergeWhereClause(args, { id: { $in: ids[0][from.fromField] || [] } });
+      }
+    }
     function graphQlQueryToMongoJoinQuery(query) {
       const _query = {
         ...query.where,
@@ -238,7 +263,7 @@ class MongooseListAdapter extends BaseListAdapter {
       query.$count = 'count';
     }
 
-    const queryTree = queryParser({ listAdapter: this }, query);
+    const queryTree = queryParser({ listAdapter: this }, query, [], include);
 
     // Run the query against the given database and collection
     return this.model
